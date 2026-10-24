@@ -7,5 +7,5 @@ export default async function FloorPage({
   searchParams: Promise<{ mode?: string | string[] }>;
 }) {
   const params = await searchParams;
-  return <FloorView mode={FEATURES.replay && params.mode === "replay" ? "replay" : "live"} />;
+  return <FloorView mode={params.mode === "feed" ? "feed" : FEATURES.replay && params.mode === "replay" ? "replay" : "live"} />;
 }
