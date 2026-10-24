@@ -16,6 +16,7 @@ export type Signals = {
   dwellSec: number;         // seconds a shopper has been in this zone (client counts; server copies ReadRequest.dwellSec when vision is used)
   item?: string;            // product in focus, short noun phrase, e.g. "grey running shoes" — the product, never the person
   upsell?: string;          // one related product to suggest, e.g. "running socks"
+  x?: number;               // 0..1 horizontal center of the shopper in the frame (overlay marker only)
 };
 
 export type Segment = "ready" | "nudge" | "plan" | "leave";
