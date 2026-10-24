@@ -257,14 +257,16 @@ function FloorSession({ mode, clip }: { mode: Mode; clip?: number }) {
     return cleanup;
   }, [mode, cameraState, stopCamera]);
 
-  function playFeedClip(index: number) {
+  function playFeedClip(index: number, resetScene = true) {
     const video = videoRef.current;
     if (!video || !feedActive.current) return;
     feedIndex.current = index;
-    scene.current += 1;
-    firstShopperAt.current = null;
-    previousShopperCount.current = 0;
-    previousSegments.current.clear();
+    if (resetScene) {
+      scene.current += 1;
+      firstShopperAt.current = null;
+      previousShopperCount.current = 0;
+      previousSegments.current.clear();
+    }
     setRead(null);
     setReadFailed(false);
     setPoseVideo(null);
@@ -282,7 +284,7 @@ function FloorSession({ mode, clip }: { mode: Mode; clip?: number }) {
     }
     let next = (feedIndex.current + 1) % feedClips.length;
     while (failedFeedClips.current.has(next)) next = (next + 1) % feedClips.length;
-    playFeedClip(next);
+    playFeedClip(next, next !== feedIndex.current);
   }
 
   async function startCamera() {
