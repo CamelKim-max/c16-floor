@@ -68,7 +68,9 @@ export function choosePlay(s: Signals): Play {
     return {
       segment: "plan",
       why,
-      cue: `Needs a plan. Shopping with ${companion}. Talk to both and ask the companion what they think of ${item}.`,
+      cue: s.upsell
+        ? `Needs a plan. Shopping with ${companion}. Talk to both, then show them a step-up option: ${s.upsell}.`
+        : `Needs a plan. Shopping with ${companion}. Talk to both and ask the companion what they think of ${item}.`,
     };
   }
   if (s.lookingAround) {

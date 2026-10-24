@@ -11,7 +11,7 @@ comparing is true only when two similar products are both visibly in hand or hel
 earbuds is true only when earbuds or headphones are visible in or on the ears.
 lookingAround is true only when the head is turned away from products, scanning the room.
 If unsure about a boolean signal, use false.
-item is only the product the shopper focuses on, never the person. upsell is one related product a store would suggest. Omit item or upsell when the product cannot be determined.
+item is only the product the shopper focuses on, never the person. upsell is one related product or a higher-end alternative the store would suggest (product only, short noun phrase). Omit item or upsell when the product cannot be determined.
 Use false, 0, alone, and product as defaults for uncertain signals. If no person is visible, return {"shoppers":[]}.`;
 
 export async function readFrame(dataUrl: string): Promise<Omit<Signals, "dwellSec">[]> {
