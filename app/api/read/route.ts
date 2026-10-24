@@ -16,7 +16,7 @@ function respond(body: ReadResponse, status = 200): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const startedAt = Date.now();
+  const startedAt = performance.now();
   let parsed: unknown;
   try {
     parsed = await request.json();
@@ -67,22 +67,26 @@ export async function POST(request: Request): Promise<Response> {
   } else {
     try {
       const observed = await readFrame(body.image!);
-      shoppers = observed.map((value, index) => {
-        const signals = normalizeSignals(value, body.dwellSec ?? 0);
-        return { track: String.fromCharCode(65 + index), signals, play: choosePlay(signals) };
-      });
+      const signals = observed.map((value) => normalizeSignals(value, body.dwellSec ?? 0));
+      if (signals.every((value) => value.x !== undefined)) {
+        signals.sort((left, right) => left.x! - right.x!);
+      }
+      shoppers = signals.slice(0, READ.maxShoppers).map((signals, index) => ({
+        track: String.fromCharCode(65 + index),
+        signals,
+        play: choosePlay(signals),
+      }));
     } catch {
       return respond({ ok: false, error: "vision failed" }, 502);
     }
   }
 
-  const ts = Date.now();
   const read: Read = {
     id: crypto.randomUUID(),
-    ts,
+    ts: Date.now(),
     zone: body.zone,
     mode: hasImage ? "live" : "signals",
-    ms: ts - startedAt,
+    ms: Math.round(performance.now() - startedAt),
     shoppers,
   };
   return respond({ ok: true, read });

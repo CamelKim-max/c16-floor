@@ -3,10 +3,15 @@ import { READ, type Signals } from "@/lib/contract";
 
 const SYSTEM = `Describe each visible shopper's observable behavior from left to right, up to ${READ.maxShoppers} shoppers.
 Report only observable behavior. Never describe or infer identity, face, age, gender, race, clothing, or looks.
-Return ONLY JSON with this structure: {"shoppers":[{"party":"alone","earbuds":false,"phoneInHand":false,"itemsInHand":0,"comparing":false,"lookingAround":false,"touchingProduct":false,"facing":"product","item":"","upsell":""}]}.
-party is alone, pair, or group. facing is product, aisle, or exit. itemsInHand counts products held, from 0 to 5.
-comparing means holding or alternating between two or more similar products. lookingAround means scanning the store for help.
-item is the product the shopper focuses on. upsell is one related product a store would suggest. Omit item or upsell when the product cannot be determined.
+Return ONLY JSON with this structure: {"shoppers":[{"party":"alone","earbuds":false,"phoneInHand":false,"itemsInHand":0,"comparing":false,"lookingAround":false,"touchingProduct":false,"facing":"product","item":"","upsell":"","x":0.50}]}.
+x is the horizontal center of the person in the image, from 0 (left edge) to 1 (right edge), rounded to 2 decimals.
+party is alone, pair, or group, based on people standing together within arm's reach and facing each other or the same product. If uncertain, use alone.
+facing is product, aisle, or exit. itemsInHand counts products held, from 0 to 5; a shopper with nothing in their hands has itemsInHand 0.
+comparing is true only when two similar products are both visibly in hand or held up side by side.
+earbuds is true only when earbuds or headphones are visible in or on the ears.
+lookingAround is true only when the head is turned away from products, scanning the room.
+If unsure about a boolean signal, use false.
+item is only the product the shopper focuses on, never the person. upsell is one related product a store would suggest. Omit item or upsell when the product cannot be determined.
 Use false, 0, alone, and product as defaults for uncertain signals. If no person is visible, return {"shoppers":[]}.`;
 
 export async function readFrame(dataUrl: string): Promise<Omit<Signals, "dwellSec">[]> {
@@ -31,7 +36,7 @@ export async function readFrame(dataUrl: string): Promise<Omit<Signals, "dwellSe
       cache: "no-store",
       body: JSON.stringify({
         model: process.env.LLM_MODEL ?? "claude-sonnet-5-5",
-        max_tokens: 1500,
+        max_tokens: 800,
         system: SYSTEM,
         messages: [{
           role: "user",
@@ -84,6 +89,7 @@ export async function readFrame(dataUrl: string): Promise<Omit<Signals, "dwellSe
         facing: signals.facing,
         ...(signals.item ? { item: signals.item } : {}),
         ...(signals.upsell ? { upsell: signals.upsell } : {}),
+        ...(signals.x !== undefined ? { x: signals.x } : {}),
       };
     });
   } finally {
