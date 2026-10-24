@@ -9,7 +9,7 @@ export const FEATURES = {
 } satisfies Record<string, boolean>;
 
 /** /floor?mode=feed plays these clips (public/feed/) in order, looping, as the store camera. */
-export const FEED_CLIPS: readonly string[] = ["/feed/1.mp4", "/feed/2.mp4", "/feed/3.mp4"];
+export const FEED_CLIPS: readonly string[] = ["/feed/1.mp4", "/feed/2.mp4", "/feed/3.mp4", "/feed/4.mp4"];
 
 /** Replay step interval on /floor?mode=replay. */
 export const REPLAY_STEP_MS = 2500;
