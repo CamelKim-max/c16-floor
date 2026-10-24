@@ -8,6 +8,9 @@ export const FEATURES = {
   buzz: true,
 } satisfies Record<string, boolean>;
 
+/** /floor?mode=feed plays these clips (public/feed/) in order, looping, as the store camera. */
+export const FEED_CLIPS: readonly string[] = ["/feed/1.mp4", "/feed/2.mp4", "/feed/3.mp4"];
+
 /** Replay step interval on /floor?mode=replay. */
 export const REPLAY_STEP_MS = 2500;
 
@@ -15,6 +18,7 @@ export const REPLAY_STEP_MS = 2500;
 export const COPY = {
   appName: "Floor coach",
   floorTitle: "Store floor",
-  privacyLine: "Frames are analyzed and discarded. No faces, no identity, nothing stored.",
+  privacyLine: "Frames are analyzed and discarded. No face recognition, no identity, nothing stored.",
+  feedLabel: "AI-generated store footage. No real shoppers.",
   earpieceLabel: "Earpiece",
 } as const;
