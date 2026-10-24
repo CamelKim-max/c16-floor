@@ -63,7 +63,8 @@ function ShopperCard({ shopper, inverse, promo }: { shopper: ShopperRead; invers
   );
 }
 
-function FloorSession({ mode }: { mode: Mode }) {
+function FloorSession({ mode, clip }: { mode: Mode; clip?: number }) {
+  const feedClips = clip === undefined ? FEED_CLIPS : [FEED_CLIPS[clip - 1]];
   const [read, setRead] = useState<Read | null>(() => mode === "replay" ? (replayReads[0] ?? null) : null);
   const [earpiece, setEarpiece] = useState(true);
   const [skeleton, setSkeleton] = useState(false);
@@ -267,20 +268,20 @@ function FloorSession({ mode }: { mode: Mode }) {
     setRead(null);
     setReadFailed(false);
     setPoseVideo(null);
-    video.src = FEED_CLIPS[index];
+    video.src = feedClips[index];
     video.load();
   }
 
   function advanceFeed(failed = false) {
     if (!feedActive.current) return;
     if (failed) failedFeedClips.current.add(feedIndex.current);
-    if (failedFeedClips.current.size >= FEED_CLIPS.length) {
+    if (failedFeedClips.current.size >= feedClips.length) {
       stopCamera();
       setFeedMissing(true);
       return;
     }
-    let next = (feedIndex.current + 1) % FEED_CLIPS.length;
-    while (failedFeedClips.current.has(next)) next = (next + 1) % FEED_CLIPS.length;
+    let next = (feedIndex.current + 1) % feedClips.length;
+    while (failedFeedClips.current.has(next)) next = (next + 1) % feedClips.length;
     playFeedClip(next);
   }
 
@@ -290,7 +291,7 @@ function FloorSession({ mode }: { mode: Mode }) {
       setFeedMissing(false);
       setSessionPaused(false);
       failedFeedClips.current.clear();
-      if (FEED_CLIPS.length === 0) {
+      if (feedClips.length === 0) {
         setFeedMissing(true);
         return;
       }
@@ -447,6 +448,6 @@ function FloorSession({ mode }: { mode: Mode }) {
   );
 }
 
-export default function FloorView({ mode }: { mode: Mode }) {
-  return <FloorSession key={mode} mode={mode} />;
+export default function FloorView({ mode, clip }: { mode: Mode; clip?: number }) {
+  return <FloorSession key={`${mode}:${clip ?? ""}`} mode={mode} clip={clip} />;
 }
