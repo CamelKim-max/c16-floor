@@ -1,0 +1,144 @@
+{
+ "name": "floor coach golden path (SPEC \u00a73)",
+ "notes": "step 7 (live vision on fixtures/frames/f1.jpg) added after owner photo",
+ "steps": [
+  {
+   "name": "1 health ok",
+   "type": "http",
+   "method": "GET",
+   "path": "/api/health",
+   "expect": {
+    "status": 200,
+    "json": {
+     "ok": true
+    }
+   },
+   "timeoutMs": 10000
+  },
+  {
+   "name": "2 signals earbuds -> Leave alone",
+   "type": "http",
+   "method": "POST",
+   "path": "/api/read",
+   "body": {
+    "zone": "A",
+    "signals": [
+     {
+      "party": "alone",
+      "earbuds": true,
+      "phoneInHand": false,
+      "itemsInHand": 0,
+      "comparing": false,
+      "lookingAround": false,
+      "touchingProduct": true,
+      "facing": "product",
+      "dwellSec": 30,
+      "item": "denim jacket"
+     }
+    ]
+   },
+   "expect": {
+    "status": 200,
+    "json": {
+     "ok": true,
+     "read.mode": "signals",
+     "read.shoppers.0.play.segment": "leave"
+    }
+   },
+   "budgetMs": 10000
+  },
+  {
+   "name": "3 signals comparing two -> Ready to buy + upsell",
+   "type": "http",
+   "method": "POST",
+   "path": "/api/read",
+   "body": {
+    "zone": "A",
+    "signals": [
+     {
+      "party": "alone",
+      "earbuds": false,
+      "phoneInHand": false,
+      "itemsInHand": 2,
+      "comparing": true,
+      "lookingAround": false,
+      "touchingProduct": true,
+      "facing": "product",
+      "dwellSec": 50,
+      "item": "grey running shoes",
+      "upsell": "running socks"
+     }
+    ]
+   },
+   "expect": {
+    "status": 200,
+    "json": {
+     "ok": true,
+     "read.mode": "signals",
+     "read.shoppers.0.play.segment": "ready"
+    },
+    "contains": [
+     "grey running shoes",
+     "running socks"
+    ]
+   },
+   "budgetMs": 10000
+  },
+  {
+   "name": "4 signals with companion -> Needs a plan",
+   "type": "http",
+   "method": "POST",
+   "path": "/api/read",
+   "body": {
+    "zone": "A",
+    "signals": [
+     {
+      "party": "pair",
+      "earbuds": false,
+      "phoneInHand": false,
+      "itemsInHand": 1,
+      "comparing": false,
+      "lookingAround": false,
+      "touchingProduct": true,
+      "facing": "product",
+      "dwellSec": 20,
+      "item": "leather tote"
+     }
+    ]
+   },
+   "expect": {
+    "status": 200,
+    "json": {
+     "ok": true,
+     "read.mode": "signals",
+     "read.shoppers.0.play.segment": "plan"
+    }
+   },
+   "budgetMs": 10000
+  },
+  {
+   "name": "5 replay 1440 shows segments",
+   "type": "page",
+   "path": "/floor?mode=replay",
+   "viewport": "1440x900",
+   "expectText": [
+    "Ready to buy",
+    "Leave alone"
+   ],
+   "withinMs": 15000,
+   "noConsoleErrors": true
+  },
+  {
+   "name": "6 replay 390 no h-scroll",
+   "type": "page",
+   "path": "/floor?mode=replay",
+   "viewport": "390x844",
+   "expectText": [
+    "Ready to buy"
+   ],
+   "withinMs": 15000,
+   "noConsoleErrors": true,
+   "noHorizontalScroll": true
+  }
+ ]
+}

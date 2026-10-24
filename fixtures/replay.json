@@ -1,0 +1,229 @@
+{
+ "reads": [
+  {
+   "id": "r1",
+   "ts": 2500,
+   "zone": "A",
+   "mode": "replay",
+   "ms": 0,
+   "shoppers": [
+    {
+     "track": "A",
+     "signals": {
+      "party": "alone",
+      "earbuds": true,
+      "phoneInHand": false,
+      "itemsInHand": 0,
+      "comparing": false,
+      "lookingAround": false,
+      "touchingProduct": true,
+      "facing": "product",
+      "dwellSec": 30,
+      "item": "denim jacket"
+     },
+     "play": {
+      "segment": "leave",
+      "why": [
+       "earbuds in",
+       "30 s in zone",
+       "touching product"
+      ],
+      "cue": "Leave alone. Earbuds in, shopping on their own. Stay visible, don't approach."
+     }
+    }
+   ]
+  },
+  {
+   "id": "r2",
+   "ts": 5000,
+   "zone": "A",
+   "mode": "replay",
+   "ms": 0,
+   "shoppers": [
+    {
+     "track": "A",
+     "signals": {
+      "party": "alone",
+      "earbuds": false,
+      "phoneInHand": false,
+      "itemsInHand": 0,
+      "comparing": false,
+      "lookingAround": false,
+      "touchingProduct": true,
+      "facing": "product",
+      "dwellSec": 20,
+      "item": "grey running shoes"
+     },
+     "play": {
+      "segment": "nudge",
+      "why": [
+       "20 s in zone",
+       "touching product"
+      ],
+      "cue": "One nudge away. Lingering on grey running shoes. Share one fact about it, then step back."
+     }
+    }
+   ]
+  },
+  {
+   "id": "r3",
+   "ts": 7500,
+   "zone": "A",
+   "mode": "replay",
+   "ms": 0,
+   "shoppers": [
+    {
+     "track": "A",
+     "signals": {
+      "party": "alone",
+      "earbuds": false,
+      "phoneInHand": false,
+      "itemsInHand": 2,
+      "comparing": true,
+      "lookingAround": false,
+      "touchingProduct": true,
+      "facing": "product",
+      "dwellSec": 50,
+      "item": "grey running shoes",
+      "upsell": "running socks"
+     },
+     "play": {
+      "segment": "ready",
+      "why": [
+       "holding 2 items",
+       "comparing",
+       "50 s in zone",
+       "touching product"
+      ],
+      "cue": "Ready to buy. Holding grey running shoes. Go now: offer their size or the fitting room. Then suggest running socks."
+     }
+    }
+   ]
+  },
+  {
+   "id": "r4",
+   "ts": 10000,
+   "zone": "A",
+   "mode": "replay",
+   "ms": 0,
+   "shoppers": [
+    {
+     "track": "A",
+     "signals": {
+      "party": "alone",
+      "earbuds": false,
+      "phoneInHand": false,
+      "itemsInHand": 2,
+      "comparing": true,
+      "lookingAround": false,
+      "touchingProduct": true,
+      "facing": "product",
+      "dwellSec": 50,
+      "item": "grey running shoes",
+      "upsell": "running socks"
+     },
+     "play": {
+      "segment": "ready",
+      "why": [
+       "holding 2 items",
+       "comparing",
+       "50 s in zone",
+       "touching product"
+      ],
+      "cue": "Ready to buy. Holding grey running shoes. Go now: offer their size or the fitting room. Then suggest running socks."
+     }
+    },
+    {
+     "track": "B",
+     "signals": {
+      "party": "alone",
+      "earbuds": true,
+      "phoneInHand": false,
+      "itemsInHand": 0,
+      "comparing": false,
+      "lookingAround": false,
+      "touchingProduct": true,
+      "facing": "product",
+      "dwellSec": 30,
+      "item": "denim jacket"
+     },
+     "play": {
+      "segment": "leave",
+      "why": [
+       "earbuds in",
+       "30 s in zone",
+       "touching product"
+      ],
+      "cue": "Leave alone. Earbuds in, shopping on their own. Stay visible, don't approach."
+     }
+    }
+   ]
+  },
+  {
+   "id": "r5",
+   "ts": 12500,
+   "zone": "A",
+   "mode": "replay",
+   "ms": 0,
+   "shoppers": [
+    {
+     "track": "A",
+     "signals": {
+      "party": "pair",
+      "earbuds": false,
+      "phoneInHand": false,
+      "itemsInHand": 1,
+      "comparing": false,
+      "lookingAround": false,
+      "touchingProduct": true,
+      "facing": "product",
+      "dwellSec": 20,
+      "item": "leather tote"
+     },
+     "play": {
+      "segment": "plan",
+      "why": [
+       "holding 1 item",
+       "with a companion",
+       "20 s in zone",
+       "touching product"
+      ],
+      "cue": "Needs a plan. Shopping with a companion. Talk to both and ask the companion what they think of leather tote."
+     }
+    }
+   ]
+  },
+  {
+   "id": "r6",
+   "ts": 15000,
+   "zone": "A",
+   "mode": "replay",
+   "ms": 0,
+   "shoppers": [
+    {
+     "track": "A",
+     "signals": {
+      "party": "alone",
+      "earbuds": false,
+      "phoneInHand": false,
+      "itemsInHand": 0,
+      "comparing": false,
+      "lookingAround": true,
+      "touchingProduct": false,
+      "facing": "aisle",
+      "dwellSec": 25,
+      "item": "trail jackets"
+     },
+     "play": {
+      "segment": "plan",
+      "why": [
+       "looking around",
+       "25 s in zone"
+      ],
+      "cue": "Needs a plan. Looking around for help. Open with a question about trail jackets, not \"Can I help you?\""
+     }
+    }
+   ]
+  }
+ ]
+}
