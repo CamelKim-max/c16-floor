@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PoseLayer } from "@/components/PoseLayer";
 import replay from "@/fixtures/replay.json";
 import { COPY, FEATURES, REPLAY_STEP_MS } from "@/lib/config";
@@ -71,6 +71,7 @@ function FloorSession({ mode }: { mode: Mode }) {
   const [speaking, setSpeaking] = useState(false);
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "running">("idle");
   const [readFailed, setReadFailed] = useState(false);
+  const [sessionPaused, setSessionPaused] = useState(false);
   const [replayRun, setReplayRun] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -78,16 +79,39 @@ function FloorSession({ mode }: { mode: Mode }) {
   const mountedRef = useRef(false);
   const startingRef = useRef(false);
   const firstShopperAt = useRef<number | null>(null);
+  const previousShopperCount = useRef(0);
   const previousSegments = useRef(new Map<string, Segment>());
   const activeCue = useRef<SpeechSynthesisUtterance | null>(null);
+  const speechQueue = useRef<string[]>([]);
+  const captureCleanup = useRef<(() => void) | null>(null);
+
+  const stopCamera = useCallback((paused = false) => {
+    captureCleanup.current?.();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    firstShopperAt.current = null;
+    previousShopperCount.current = 0;
+    previousSegments.current.clear();
+    setPoseVideo(null);
+    setSkeletonView(false);
+    setCameraState("idle");
+    setRead(null);
+    setReadFailed(false);
+    setSessionPaused(paused);
+  }, []);
+
+  const handlePoseFail = useCallback(() => setSkeletonView(false), []);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      captureCleanup.current?.();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       activeCue.current = null;
+      speechQueue.current = [];
       if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     };
   }, []);
@@ -106,24 +130,33 @@ function FloorSession({ mode }: { mode: Mode }) {
         }).catch(() => {});
       }
     }
-    const changed = changes[0];
-    if (!earpiece || !changed || typeof window === "undefined" || !("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
-    const cue = new SpeechSynthesisUtterance(changed.play.cue);
-    cue.rate = 1.05;
-    cue.lang = "en-US";
-    cue.onstart = () => {
-      if (activeCue.current === cue) setSpeaking(true);
+    if (!earpiece || typeof window === "undefined" || !("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
+    for (const shopper of changes) {
+      speechQueue.current.push(shopper.play.cue);
+      if (speechQueue.current.length > 3) speechQueue.current.shift();
+    }
+    const speakNext = () => {
+      if (!mountedRef.current || activeCue.current) return;
+      const text = speechQueue.current.shift();
+      if (text === undefined) return;
+      const cue = new SpeechSynthesisUtterance(text);
+      cue.rate = 1.05;
+      cue.lang = "en-US";
+      cue.onstart = () => {
+        if (activeCue.current === cue) setSpeaking(true);
+      };
+      const finish = () => {
+        if (activeCue.current !== cue) return;
+        activeCue.current = null;
+        setSpeaking(false);
+        speakNext();
+      };
+      cue.onend = finish;
+      cue.onerror = finish;
+      activeCue.current = cue;
+      window.speechSynthesis.speak(cue);
     };
-    const finish = () => {
-      if (activeCue.current !== cue) return;
-      activeCue.current = null;
-      setSpeaking(false);
-    };
-    cue.onend = finish;
-    cue.onerror = finish;
-    activeCue.current = cue;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(cue);
+    speakNext();
   }, [read, earpiece, mode]);
 
   useEffect(() => {
@@ -140,12 +173,13 @@ function FloorSession({ mode }: { mode: Mode }) {
     if (mode !== "live" || cameraState !== "running") return;
     let active = true;
     let busy = false;
+    let reads = 0;
     let controller: AbortController | null = null;
 
     const capture = async () => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      if (busy || !video || !canvas || !video.videoWidth || !video.videoHeight) return;
+      if (!active || busy || document.visibilityState !== "visible" || reads >= 150 || !video || !canvas || !video.videoWidth || !video.videoHeight) return;
       const context = canvas.getContext("2d");
       if (!context) return;
       busy = true;
@@ -161,6 +195,7 @@ function FloorSession({ mode }: { mode: Mode }) {
         const body: ReadRequest = { zone: "A", image, dwellSec };
         controller = new AbortController();
         timeout = window.setTimeout(() => controller?.abort(), READ.modelTimeoutMs + READ.everyMs);
+        reads += 1;
         const response = await fetch(ROUTES.read, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -172,8 +207,10 @@ function FloorSession({ mode }: { mode: Mode }) {
         const result = await response.json() as ReadResponse;
         if (!result.ok) throw new Error("Read failed");
         if (!active) return;
-        if (result.read.shoppers.length === 0) firstShopperAt.current = null;
-        else if (firstShopperAt.current === null) firstShopperAt.current = performance.now();
+        const shopperCount = result.read.shoppers.length;
+        if (shopperCount === 0) firstShopperAt.current = null;
+        else if (firstShopperAt.current === null || shopperCount !== previousShopperCount.current) firstShopperAt.current = performance.now();
+        previousShopperCount.current = shopperCount;
         setRead(result.read);
         setReadFailed(false);
       } catch {
@@ -183,21 +220,26 @@ function FloorSession({ mode }: { mode: Mode }) {
         window.clearTimeout(timeout);
         busy = false;
         controller = null;
+        if (active && reads >= 150) stopCamera(true);
       }
     };
 
-    void capture();
     const timer = window.setInterval(() => void capture(), READ.everyMs);
-    return () => {
+    const cleanup = () => {
       active = false;
       window.clearInterval(timer);
       controller?.abort();
+      if (captureCleanup.current === cleanup) captureCleanup.current = null;
     };
-  }, [mode, cameraState]);
+    captureCleanup.current = cleanup;
+    void capture();
+    return cleanup;
+  }, [mode, cameraState, stopCamera]);
 
   async function startCamera() {
     if (startingRef.current || streamRef.current) return;
     startingRef.current = true;
+    setSessionPaused(false);
     setCameraState("starting");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
@@ -206,9 +248,12 @@ function FloorSession({ mode }: { mode: Mode }) {
         return;
       }
       streamRef.current = stream;
+      stream.getTracks().forEach((track) => track.addEventListener("ended", () => {
+        if (streamRef.current === stream) stopCamera();
+      }, { once: true }));
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || streamRef.current !== stream) return;
       setPoseVideo(videoRef.current);
       setReadFailed(false);
       setCameraState("running");
@@ -257,6 +302,7 @@ function FloorSession({ mode }: { mode: Mode }) {
                   setEarpiece(event.target.checked);
                   if (!event.target.checked) {
                     activeCue.current = null;
+                    speechQueue.current = [];
                     setSpeaking(false);
                     if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
                   }
@@ -267,6 +313,9 @@ function FloorSession({ mode }: { mode: Mode }) {
             </label>
             {mode === "live" && (
               <button type="button" aria-pressed={skeletonView} className="control" onClick={() => setSkeletonView((value) => !value)}>Skeleton view</button>
+            )}
+            {mode === "live" && cameraState === "running" && (
+              <button type="button" className="control" onClick={() => stopCamera()}>Stop camera</button>
             )}
             {speaking && (
               <span role="status" className="flex items-center gap-2 text-sm text-text-secondary">
@@ -282,7 +331,7 @@ function FloorSession({ mode }: { mode: Mode }) {
               {mode === "live" ? (
                 <>
                   <video ref={videoRef} autoPlay playsInline muted onPlaying={(event) => setPoseVideo(event.currentTarget)} onEmptied={() => setPoseVideo(null)} onEnded={() => setPoseVideo(null)} className={`${cameraState === "running" ? "block h-auto w-full" : "absolute inset-0 h-full w-full object-contain"} ${skeletonView ? "opacity-0" : ""}`} />
-                  {skeletonView && <PoseLayer video={poseVideo} active />}
+                  {skeletonView && <PoseLayer video={poseVideo} active onFail={handlePoseFail} />}
                   {cameraState !== "running" && (
                     <button type="button" disabled={cameraState === "starting"} onClick={() => void startCamera()} className="control control-primary relative">Start camera</button>
                   )}
@@ -304,6 +353,7 @@ function FloorSession({ mode }: { mode: Mode }) {
                 <p className="tracking-normal tabular-nums">Read in {read.ms} ms · {read.shoppers.length} {read.shoppers.length === 1 ? "shopper" : "shoppers"}</p>
               ))}
               {readFailed && <p role="status" className="rounded-full bg-error-bg px-2.5 py-[3px] font-medium text-error">Read failed, retrying</p>}
+              {sessionPaused && <p role="status">Paused after 10 minutes. Start again to continue.</p>}
             </div>
           </section>
           <section className="grid min-w-0 gap-4" aria-live="polite" aria-atomic="true" aria-label={COPY.floorTitle}>

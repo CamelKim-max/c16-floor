@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
 
-export function PoseLayer({ video, active }: { video: HTMLVideoElement | null; active: boolean }) {
+export function PoseLayer({ video, active, onFail }: { video: HTMLVideoElement | null; active: boolean; onFail?: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const warnedRef = useRef(false);
   const [failed, setFailed] = useState(false);
@@ -31,6 +31,7 @@ export function PoseLayer({ video, active }: { video: HTMLVideoElement | null; a
       setFailed(true);
       cancelAnimationFrame(frame);
       close();
+      onFail?.();
     };
 
     const start = async () => {
@@ -125,7 +126,7 @@ export function PoseLayer({ video, active }: { video: HTMLVideoElement | null; a
       close();
       canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     };
-  }, [video, active]);
+  }, [video, active, onFail]);
 
   if (!active || failed) return null;
   return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />;
