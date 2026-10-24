@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import replay from "@/fixtures/replay.json";
-import { COPY, REPLAY_STEP_MS } from "@/lib/config";
+import { COPY, FEATURES, REPLAY_STEP_MS } from "@/lib/config";
 import {
   READ, ROUTES, SEGMENT_LABEL,
   type Read, type ReadRequest, type ReadResponse, type Segment, type ShopperRead,
@@ -11,12 +11,37 @@ import {
 type Mode = "live" | "replay";
 const replayReads = (replay as { reads: Read[] }).reads;
 
-const segmentStyle: Record<Segment, { card: string; label: string; dot: string }> = {
-  ready: { card: "border-lime-300/50 bg-lime-300/10", label: "text-lime-300", dot: "bg-lime-300" },
-  nudge: { card: "border-amber-300/50 bg-amber-300/10", label: "text-amber-300", dot: "bg-amber-300" },
-  plan: { card: "border-sky-300/50 bg-sky-300/10", label: "text-sky-300", dot: "bg-sky-300" },
-  leave: { card: "border-violet-300/50 bg-violet-300/10", label: "text-violet-300", dot: "bg-violet-300" },
+const segmentStyle: Record<Segment, { card: string; label: string; dot: string; marker: string }> = {
+  ready: { card: "border-lime-300/50 bg-lime-300/10", label: "text-lime-300", dot: "bg-lime-300", marker: "border-lime-300" },
+  nudge: { card: "border-amber-300/50 bg-amber-300/10", label: "text-amber-300", dot: "bg-amber-300", marker: "border-amber-300" },
+  plan: { card: "border-sky-300/50 bg-sky-300/10", label: "text-sky-300", dot: "bg-sky-300", marker: "border-sky-300" },
+  leave: { card: "border-violet-300/50 bg-violet-300/10", label: "text-violet-300", dot: "bg-violet-300", marker: "border-violet-300" },
 };
+
+function ShopperMarkers({ shoppers }: { shoppers: ShopperRead[] }) {
+  return (
+    <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+      {shoppers.map((shopper) => {
+        const x = shopper.signals.x;
+        if (x === undefined || !Number.isFinite(x) || x < 0 || x > 1) return null;
+        const style = segmentStyle[shopper.play.segment];
+        return (
+          <div
+            key={shopper.track}
+            className="absolute top-[35%] flex w-10 -translate-x-1/2 flex-col items-center gap-1 transition-[left,opacity] duration-700 ease-out motion-reduce:transition-none sm:w-12"
+            style={{ left: `${x * 100}%` }}
+          >
+            <span className={`flex size-10 items-center justify-center rounded-lg border-2 bg-slate-950/90 font-mono text-xl font-bold text-white sm:size-12 sm:text-2xl ${style.marker}`}>{shopper.track}</span>
+            <span
+              className={`w-max rounded-md bg-slate-950/90 px-2 py-1 text-xs font-semibold whitespace-nowrap transition-transform duration-700 ease-out motion-reduce:transition-none sm:text-sm ${style.label}`}
+              style={{ transform: `translateX(${(0.5 - x) * 100}%)` }}
+            >{SEGMENT_LABEL[shopper.play.segment]}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function ShopperCard({ shopper }: { shopper: ShopperRead }) {
   const style = segmentStyle[shopper.play.segment];
@@ -40,6 +65,7 @@ function ShopperCard({ shopper }: { shopper: ShopperRead }) {
 function FloorSession({ mode }: { mode: Mode }) {
   const [read, setRead] = useState<Read | null>(() => mode === "replay" ? (replayReads[0] ?? null) : null);
   const [earpiece, setEarpiece] = useState(true);
+  const [speaking, setSpeaking] = useState(false);
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "running">("idle");
   const [readFailed, setReadFailed] = useState(false);
   const [replayRun, setReplayRun] = useState(0);
@@ -50,6 +76,7 @@ function FloorSession({ mode }: { mode: Mode }) {
   const startingRef = useRef(false);
   const firstShopperAt = useRef<number | null>(null);
   const previousSegments = useRef(new Map<string, Segment>());
+  const activeCue = useRef<SpeechSynthesisUtterance | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -57,21 +84,44 @@ function FloorSession({ mode }: { mode: Mode }) {
       mountedRef.current = false;
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+      activeCue.current = null;
       if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     };
   }, []);
 
   useEffect(() => {
     if (!read) return;
-    const changed = read.shoppers.find((shopper) => previousSegments.current.get(shopper.track) !== shopper.play.segment);
+    const changes = read.shoppers.filter((shopper) => previousSegments.current.get(shopper.track) !== shopper.play.segment);
     previousSegments.current = new Map(read.shoppers.map((shopper) => [shopper.track, shopper.play.segment]));
+    if (mode === "live" && FEATURES.buzz) {
+      for (const shopper of changes) {
+        if (shopper.play.segment !== "ready") continue;
+        void fetch("/api/buzz", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ zone: "A", item: shopper.signals.item }),
+        }).catch(() => {});
+      }
+    }
+    const changed = changes[0];
     if (!earpiece || !changed || typeof window === "undefined" || !("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
     const cue = new SpeechSynthesisUtterance(changed.play.cue);
     cue.rate = 1.05;
     cue.lang = "en-US";
+    cue.onstart = () => {
+      if (activeCue.current === cue) setSpeaking(true);
+    };
+    const finish = () => {
+      if (activeCue.current !== cue) return;
+      activeCue.current = null;
+      setSpeaking(false);
+    };
+    cue.onend = finish;
+    cue.onerror = finish;
+    activeCue.current = cue;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(cue);
-  }, [read, earpiece]);
+  }, [read, earpiece, mode]);
 
   useEffect(() => {
     if (mode !== "replay" || replayReads.length === 0) return;
@@ -199,35 +249,50 @@ function FloorSession({ mode }: { mode: Mode }) {
                 checked={earpiece}
                 onChange={(event) => {
                   setEarpiece(event.target.checked);
-                  if (!event.target.checked && typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+                  if (!event.target.checked) {
+                    activeCue.current = null;
+                    setSpeaking(false);
+                    if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+                  }
                 }}
                 className="size-4 accent-lime-300 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lime-300"
               />
               {COPY.earpieceLabel}
             </label>
+            {speaking && (
+              <span role="status" className="flex items-center gap-2 text-sm text-lime-300">
+                <span aria-hidden="true" className="size-2 shrink-0 animate-pulse rounded-full bg-lime-300 motion-reduce:animate-none" />
+                Speaking to earpiece
+              </span>
+            )}
           </div>
         </header>
         <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
           <section className="min-w-0 lg:sticky lg:top-7" aria-label={mode === "replay" ? "Replay" : COPY.floorTitle}>
-            <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-2xl border border-slate-700 bg-slate-900">
+            <div className={`relative flex items-center justify-center overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 ${mode === "live" && cameraState === "running" ? "" : "aspect-video"}`}>
               {mode === "live" ? (
                 <>
-                  <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-contain" />
+                  <video ref={videoRef} autoPlay playsInline muted className={cameraState === "running" ? "block h-auto w-full" : "absolute inset-0 h-full w-full object-contain"} />
                   {cameraState !== "running" && (
                     <button type="button" disabled={cameraState === "starting"} onClick={() => void startCamera()} className="relative rounded-xl bg-lime-300 px-6 py-3 font-semibold text-slate-950 hover:bg-lime-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lime-300 disabled:cursor-wait disabled:opacity-60">Start camera</button>
                   )}
                 </>
               ) : (
                 <div className="flex flex-wrap justify-center gap-4 p-6" aria-hidden="true">
-                  {read?.shoppers.map((shopper) => (
+                  {read?.shoppers.filter((shopper) => shopper.signals.x === undefined).map((shopper) => (
                     <div key={shopper.track} className={`flex size-20 items-center justify-center rounded-2xl border text-4xl font-semibold sm:size-24 ${segmentStyle[shopper.play.segment].card} ${segmentStyle[shopper.play.segment].label}`}>{shopper.track}</div>
                   ))}
                 </div>
               )}
+              <ShopperMarkers shoppers={read?.shoppers ?? []} />
             </div>
             <canvas ref={canvasRef} hidden />
             <div className="mt-3 flex min-h-5 flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-              {read && readTime && <time dateTime={readTime} className="font-mono tabular-nums">{mode === "replay" ? `${read.ts / 1000} s` : `${readTime.slice(11, 19)} UTC`} · {read.ms} ms</time>}
+              {read && readTime && (mode === "replay" ? (
+                <time dateTime={readTime} className="font-mono tabular-nums">{read.ts / 1000} s · {read.ms} ms</time>
+              ) : (
+                <p className="font-mono tabular-nums">Read in {read.ms} ms · {read.shoppers.length} {read.shoppers.length === 1 ? "shopper" : "shoppers"}</p>
+              ))}
               {readFailed && <p role="status" className="text-amber-300">Read failed, retrying</p>}
             </div>
           </section>
