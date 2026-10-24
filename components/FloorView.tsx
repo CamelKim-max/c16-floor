@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PoseLayer } from "@/components/PoseLayer";
 import replay from "@/fixtures/replay.json";
-import { COPY, FEATURES, REPLAY_STEP_MS } from "@/lib/config";
+import { COPY, FEATURES, FEED_CLIPS, REPLAY_STEP_MS } from "@/lib/config";
 import {
   READ, ROUTES, SEGMENT_LABEL,
   type Read, type ReadRequest, type ReadResponse, type Segment, type ShopperRead,
 } from "@/lib/contract";
 
-type Mode = "live" | "replay";
+type Mode = "live" | "replay" | "feed";
 const replayReads = (replay as { reads: Read[] }).reads;
 
 const segmentStyle: Record<Segment, { label: string; marker: string }> = {
@@ -72,6 +72,7 @@ function FloorSession({ mode }: { mode: Mode }) {
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "running">("idle");
   const [readFailed, setReadFailed] = useState(false);
   const [sessionPaused, setSessionPaused] = useState(false);
+  const [feedMissing, setFeedMissing] = useState(false);
   const [replayRun, setReplayRun] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -84,12 +85,24 @@ function FloorSession({ mode }: { mode: Mode }) {
   const activeCue = useRef<SpeechSynthesisUtterance | null>(null);
   const speechQueue = useRef<string[]>([]);
   const captureCleanup = useRef<(() => void) | null>(null);
+  const feedActive = useRef(false);
+  const feedIndex = useRef(0);
+  const failedFeedClips = useRef(new Set<number>());
+  const scene = useRef(0);
 
   const stopCamera = useCallback((paused = false) => {
     captureCleanup.current?.();
+    feedActive.current = false;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+      if (mode === "feed") {
+        videoRef.current.pause();
+        videoRef.current.removeAttribute("src");
+        videoRef.current.load();
+      }
+    }
     firstShopperAt.current = null;
     previousShopperCount.current = 0;
     previousSegments.current.clear();
@@ -99,7 +112,7 @@ function FloorSession({ mode }: { mode: Mode }) {
     setRead(null);
     setReadFailed(false);
     setSessionPaused(paused);
-  }, []);
+  }, [mode]);
 
   const handlePoseFail = useCallback(() => setSkeletonView(false), []);
 
@@ -120,7 +133,7 @@ function FloorSession({ mode }: { mode: Mode }) {
     if (!read) return;
     const changes = read.shoppers.filter((shopper) => previousSegments.current.get(shopper.track) !== shopper.play.segment);
     previousSegments.current = new Map(read.shoppers.map((shopper) => [shopper.track, shopper.play.segment]));
-    if (mode === "live" && FEATURES.buzz) {
+    if (mode !== "replay" && FEATURES.buzz) {
       for (const shopper of changes) {
         if (shopper.play.segment !== "ready") continue;
         void fetch("/api/buzz", {
@@ -170,7 +183,7 @@ function FloorSession({ mode }: { mode: Mode }) {
   }, [mode, replayRun]);
 
   useEffect(() => {
-    if (mode !== "live" || cameraState !== "running") return;
+    if (mode === "replay" || cameraState !== "running") return;
     let active = true;
     let busy = false;
     let reads = 0;
@@ -180,9 +193,11 @@ function FloorSession({ mode }: { mode: Mode }) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (!active || busy || document.visibilityState !== "visible" || reads >= 150 || !video || !canvas || !video.videoWidth || !video.videoHeight) return;
+      if (mode === "feed" && (!feedActive.current || video.paused || video.ended || video.readyState < 2)) return;
       const context = canvas.getContext("2d");
       if (!context) return;
       busy = true;
+      const capturedScene = scene.current;
       let timeout: number | undefined;
       try {
         canvas.width = READ.imageWidth;
@@ -206,7 +221,7 @@ function FloorSession({ mode }: { mode: Mode }) {
         if (!response.ok) throw new Error("Read failed");
         const result = await response.json() as ReadResponse;
         if (!result.ok) throw new Error("Read failed");
-        if (!active) return;
+        if (!active || capturedScene !== scene.current) return;
         const shopperCount = result.read.shoppers.length;
         if (shopperCount === 0) firstShopperAt.current = null;
         else if (firstShopperAt.current === null || shopperCount !== previousShopperCount.current) firstShopperAt.current = performance.now();
@@ -214,7 +229,7 @@ function FloorSession({ mode }: { mode: Mode }) {
         setRead(result.read);
         setReadFailed(false);
       } catch {
-        if (active) setReadFailed(true);
+        if (active && capturedScene === scene.current) setReadFailed(true);
       } finally {
         context.clearRect(0, 0, canvas.width, canvas.height);
         window.clearTimeout(timeout);
@@ -236,7 +251,49 @@ function FloorSession({ mode }: { mode: Mode }) {
     return cleanup;
   }, [mode, cameraState, stopCamera]);
 
+  function playFeedClip(index: number) {
+    const video = videoRef.current;
+    if (!video || !feedActive.current) return;
+    feedIndex.current = index;
+    scene.current += 1;
+    firstShopperAt.current = null;
+    previousShopperCount.current = 0;
+    previousSegments.current.clear();
+    setRead(null);
+    setReadFailed(false);
+    setPoseVideo(null);
+    video.src = FEED_CLIPS[index];
+    video.load();
+  }
+
+  function advanceFeed(failed = false) {
+    if (!feedActive.current) return;
+    if (failed) failedFeedClips.current.add(feedIndex.current);
+    if (failedFeedClips.current.size >= FEED_CLIPS.length) {
+      stopCamera();
+      setFeedMissing(true);
+      return;
+    }
+    let next = (feedIndex.current + 1) % FEED_CLIPS.length;
+    while (failedFeedClips.current.has(next)) next = (next + 1) % FEED_CLIPS.length;
+    playFeedClip(next);
+  }
+
   async function startCamera() {
+    if (mode === "feed") {
+      if (feedActive.current) return;
+      setFeedMissing(false);
+      setSessionPaused(false);
+      failedFeedClips.current.clear();
+      if (FEED_CLIPS.length === 0) {
+        setFeedMissing(true);
+        return;
+      }
+      feedActive.current = true;
+      setCameraState("starting");
+      playFeedClip(0);
+      return;
+    }
     if (startingRef.current || streamRef.current) return;
     startingRef.current = true;
     setSessionPaused(false);
@@ -311,11 +368,11 @@ function FloorSession({ mode }: { mode: Mode }) {
               />
               {COPY.earpieceLabel}
             </label>
-            {mode === "live" && (
+            {mode !== "replay" && (
               <button type="button" aria-pressed={skeletonView} className="control" onClick={() => setSkeletonView((value) => !value)}>Skeleton view</button>
             )}
-            {mode === "live" && cameraState === "running" && (
-              <button type="button" className="control" onClick={() => stopCamera()}>Stop camera</button>
+            {mode !== "replay" && (cameraState === "running" || (mode === "feed" && cameraState === "starting")) && (
+              <button type="button" className="control" onClick={() => stopCamera()}>{mode === "feed" ? "Stop" : "Stop camera"}</button>
             )}
             {speaking && (
               <span role="status" className="flex items-center gap-2 text-sm text-text-secondary">
@@ -327,13 +384,24 @@ function FloorSession({ mode }: { mode: Mode }) {
         </header>
         <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
           <section className="min-w-0 lg:sticky lg:top-6" aria-label={mode === "replay" ? "Replay" : COPY.floorTitle}>
-            <div className={`relative flex items-center justify-center overflow-hidden rounded-[14px] border border-border-default ${skeletonView ? "bg-[#141414]" : "bg-bg-subtle"} ${mode === "live" && cameraState === "running" ? "" : "aspect-video"}`}>
-              {mode === "live" ? (
+            <div className={`relative flex items-center justify-center overflow-hidden rounded-[14px] border border-border-default ${skeletonView ? "bg-[#141414]" : "bg-bg-subtle"} ${mode !== "replay" && cameraState === "running" ? "" : "aspect-video"}`}>
+              {mode !== "replay" ? (
                 <>
-                  <video ref={videoRef} autoPlay playsInline muted onPlaying={(event) => setPoseVideo(event.currentTarget)} onEmptied={() => setPoseVideo(null)} onEnded={() => setPoseVideo(null)} className={`${cameraState === "running" ? "block h-auto w-full" : "absolute inset-0 h-full w-full object-contain"} ${skeletonView ? "opacity-0" : ""}`} />
+                  <video ref={videoRef} autoPlay playsInline muted onPlaying={(event) => {
+                    if (mode === "feed") {
+                      if (!feedActive.current) return;
+                      setCameraState("running");
+                    }
+                    setPoseVideo(event.currentTarget);
+                  }} onEmptied={() => setPoseVideo(null)} onEnded={() => {
+                    setPoseVideo(null);
+                    if (mode === "feed") advanceFeed();
+                  }} onError={() => {
+                    if (mode === "feed") advanceFeed(true);
+                  }} className={`${cameraState === "running" ? "block h-auto w-full" : "absolute inset-0 h-full w-full object-contain"} ${skeletonView ? "opacity-0" : ""}`} />
                   {skeletonView && <PoseLayer video={poseVideo} active onFail={handlePoseFail} />}
                   {cameraState !== "running" && (
-                    <button type="button" disabled={cameraState === "starting"} onClick={() => void startCamera()} className="control control-primary relative">Start camera</button>
+                    <button type="button" disabled={cameraState === "starting"} onClick={() => void startCamera()} className="control control-primary relative">{mode === "feed" ? "Start feed" : "Start camera"}</button>
                   )}
                 </>
               ) : (
@@ -344,6 +412,7 @@ function FloorSession({ mode }: { mode: Mode }) {
                 </div>
               )}
               <ShopperMarkers shoppers={read?.shoppers ?? []} />
+              {mode === "feed" && <span className="pointer-events-none absolute top-2 left-2 z-10 rounded-[6px] bg-[rgba(20,20,20,0.7)] px-2 py-1 text-xs font-medium text-white">{COPY.feedLabel}</span>}
             </div>
             <canvas ref={canvasRef} hidden />
             <div className="mt-3 flex min-h-5 flex-wrap items-center justify-between gap-2 text-xs text-text-muted">
@@ -353,6 +422,7 @@ function FloorSession({ mode }: { mode: Mode }) {
                 <p className="tracking-normal tabular-nums">Read in {read.ms} ms · {read.shoppers.length} {read.shoppers.length === 1 ? "shopper" : "shoppers"}</p>
               ))}
               {readFailed && <p role="status" className="rounded-full bg-error-bg px-2.5 py-[3px] font-medium text-error">Read failed, retrying</p>}
+              {feedMissing && <p role="status">No feed clips found.</p>}
               {sessionPaused && <p role="status">Paused after 10 minutes. Start again to continue.</p>}
             </div>
           </section>
