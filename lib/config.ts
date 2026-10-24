@@ -16,7 +16,7 @@ export const REPLAY_STEP_MS = 2500;
 
 /** English demo copy (owner edits). */
 export const COPY = {
-  appName: "Floor coach",
+  appName: "HyperSell",
   floorTitle: "Store floor",
   privacyLine: "Frames are analyzed and discarded. No face recognition, no identity, nothing stored.",
   feedLabel: "AI-generated store footage. No real shoppers.",

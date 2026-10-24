@@ -1,10 +1,10 @@
-# Floor coach
+# HyperSell
 
 Store cameras read what each shopper's body is doing and whisper one line into the sales associate's earpiece: who is ready to buy, who needs a nudge, who needs a plan, and who should be left alone.
 
 - Live: https://c16-floor.vercel.app/floor (webcam) · `/floor?mode=feed` (store footage) · `/floor?mode=replay` (offline replay, no server)
 - Track: No App — the associate never looks at a screen. The page is for judges and managers.
-- Built solo at c0mpiled-16 @ UC San Diego, 2026-10-24.
+- Team TidyMind. Built solo at c0mpiled-16 @ UC San Diego, 2026-10-24.
 
 ## How it works
 1. Every 4 s the page grabs a camera frame (640 px JPEG) and posts it to `POST /api/read`.

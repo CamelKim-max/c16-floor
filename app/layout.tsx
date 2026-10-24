@@ -10,8 +10,8 @@ const notoSans = Noto_Sans_KR({
 });
 
 export const metadata: Metadata = {
-  title: "Floor coach",
-  description: "Floor coach",
+  title: "HyperSell",
+  description: "HyperSell",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
