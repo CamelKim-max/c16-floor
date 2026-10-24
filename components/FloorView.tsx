@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { PoseLayer } from "@/components/PoseLayer";
 import replay from "@/fixtures/replay.json";
 import { COPY, FEATURES, REPLAY_STEP_MS } from "@/lib/config";
 import {
@@ -65,6 +66,8 @@ function ShopperCard({ shopper }: { shopper: ShopperRead }) {
 function FloorSession({ mode }: { mode: Mode }) {
   const [read, setRead] = useState<Read | null>(() => mode === "replay" ? (replayReads[0] ?? null) : null);
   const [earpiece, setEarpiece] = useState(true);
+  const [skeletonView, setSkeletonView] = useState(false);
+  const [poseVideo, setPoseVideo] = useState<HTMLVideoElement | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "running">("idle");
   const [readFailed, setReadFailed] = useState(false);
@@ -206,6 +209,7 @@ function FloorSession({ mode }: { mode: Mode }) {
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
       if (!mountedRef.current) return;
+      setPoseVideo(videoRef.current);
       setReadFailed(false);
       setCameraState("running");
     } catch {
@@ -259,6 +263,9 @@ function FloorSession({ mode }: { mode: Mode }) {
               />
               {COPY.earpieceLabel}
             </label>
+            {mode === "live" && (
+              <button type="button" aria-pressed={skeletonView} className={`${buttonStyle} ${skeletonView ? "border-lime-300 text-lime-300" : ""}`} onClick={() => setSkeletonView((value) => !value)}>Skeleton view</button>
+            )}
             {speaking && (
               <span role="status" className="flex items-center gap-2 text-sm text-lime-300">
                 <span aria-hidden="true" className="size-2 shrink-0 animate-pulse rounded-full bg-lime-300 motion-reduce:animate-none" />
@@ -272,7 +279,8 @@ function FloorSession({ mode }: { mode: Mode }) {
             <div className={`relative flex items-center justify-center overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 ${mode === "live" && cameraState === "running" ? "" : "aspect-video"}`}>
               {mode === "live" ? (
                 <>
-                  <video ref={videoRef} autoPlay playsInline muted className={cameraState === "running" ? "block h-auto w-full" : "absolute inset-0 h-full w-full object-contain"} />
+                  <video ref={videoRef} autoPlay playsInline muted className={`${cameraState === "running" ? "block h-auto w-full" : "absolute inset-0 h-full w-full object-contain"} ${skeletonView ? "opacity-0" : ""}`} />
+                  {skeletonView && <PoseLayer video={poseVideo} active />}
                   {cameraState !== "running" && (
                     <button type="button" disabled={cameraState === "starting"} onClick={() => void startCamera()} className="relative rounded-xl bg-lime-300 px-6 py-3 font-semibold text-slate-950 hover:bg-lime-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lime-300 disabled:cursor-wait disabled:opacity-60">Start camera</button>
                   )}
