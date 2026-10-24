@@ -29,12 +29,12 @@ function ShopperMarkers({ shoppers }: { shoppers: ShopperRead[] }) {
         return (
           <div
             key={shopper.track}
-            className="absolute top-[35%] flex w-10 -translate-x-1/2 flex-col items-center gap-1 transition-[left,opacity] duration-700 ease-out motion-reduce:transition-none sm:w-12"
+            className="absolute top-[4%] flex w-7 -translate-x-1/2 flex-col items-center gap-0.5 opacity-90 transition-[left,opacity] duration-700 ease-out motion-reduce:transition-none sm:w-8"
             style={{ left: `${x * 100}%` }}
           >
-            <span className={`flex size-10 items-center justify-center rounded-[6px] border-2 bg-bg-base text-xl font-semibold tracking-normal text-text-primary tabular-nums sm:size-12 sm:text-2xl ${style.marker}`}>{shopper.track}</span>
+            <span className={`flex size-7 items-center justify-center rounded-[6px] border-2 bg-bg-base text-sm font-semibold tracking-normal text-text-primary tabular-nums sm:size-8 sm:text-base ${style.marker}`}>{shopper.track}</span>
             <span
-              className={`w-max rounded-full border border-border-strong bg-bg-base px-2.5 py-[3px] text-xs font-medium whitespace-nowrap transition-transform duration-700 ease-out motion-reduce:transition-none ${style.label}`}
+              className={`w-max rounded-full border border-border-strong bg-bg-base px-2 py-px text-[11px] leading-4 font-medium whitespace-nowrap transition-transform duration-700 ease-out motion-reduce:transition-none ${style.label}`}
               style={{ transform: `translateX(${(0.5 - x) * 100}%)` }}
             >{SEGMENT_LABEL[shopper.play.segment]}</span>
           </div>
