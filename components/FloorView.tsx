@@ -66,7 +66,8 @@ function ShopperCard({ shopper, inverse, promo }: { shopper: ShopperRead; invers
 function FloorSession({ mode }: { mode: Mode }) {
   const [read, setRead] = useState<Read | null>(() => mode === "replay" ? (replayReads[0] ?? null) : null);
   const [earpiece, setEarpiece] = useState(true);
-  const [skeletonView, setSkeletonView] = useState(false);
+  const [skeleton, setSkeleton] = useState(false);
+  const [hideVideo, setHideVideo] = useState(false);
   const [poseVideo, setPoseVideo] = useState<HTMLVideoElement | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "running">("idle");
@@ -107,14 +108,18 @@ function FloorSession({ mode }: { mode: Mode }) {
     previousShopperCount.current = 0;
     previousSegments.current.clear();
     setPoseVideo(null);
-    setSkeletonView(false);
+    setSkeleton(false);
+    setHideVideo(false);
     setCameraState("idle");
     setRead(null);
     setReadFailed(false);
     setSessionPaused(paused);
   }, [mode]);
 
-  const handlePoseFail = useCallback(() => setSkeletonView(false), []);
+  const handlePoseFail = useCallback(() => {
+    setSkeleton(false);
+    setHideVideo(false);
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -369,7 +374,13 @@ function FloorSession({ mode }: { mode: Mode }) {
               {COPY.earpieceLabel}
             </label>
             {mode !== "replay" && (
-              <button type="button" aria-pressed={skeletonView} className="control" onClick={() => setSkeletonView((value) => !value)}>Skeleton view</button>
+              <>
+                <button type="button" aria-pressed={skeleton} className="control" onClick={() => {
+                  if (skeleton) setHideVideo(false);
+                  setSkeleton(!skeleton);
+                }}>Skeleton</button>
+                <button type="button" aria-pressed={hideVideo} disabled={!skeleton} className="control disabled:cursor-not-allowed" onClick={() => setHideVideo((value) => !value)}>Hide video</button>
+              </>
             )}
             {mode !== "replay" && (cameraState === "running" || (mode === "feed" && cameraState === "starting")) && (
               <button type="button" className="control" onClick={() => stopCamera()}>{mode === "feed" ? "Stop" : "Stop camera"}</button>
@@ -384,7 +395,7 @@ function FloorSession({ mode }: { mode: Mode }) {
         </header>
         <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
           <section className="min-w-0 lg:sticky lg:top-6" aria-label={mode === "replay" ? "Replay" : COPY.floorTitle}>
-            <div className={`relative flex items-center justify-center overflow-hidden rounded-[14px] border border-border-default ${skeletonView ? "bg-[#141414]" : "bg-bg-subtle"} ${mode !== "replay" && cameraState === "running" ? "" : "aspect-video"}`}>
+            <div className={`relative flex items-center justify-center overflow-hidden rounded-[14px] border border-border-default ${hideVideo ? "bg-[#141414]" : "bg-bg-subtle"} ${mode !== "replay" && cameraState === "running" ? "" : "aspect-video"}`}>
               {mode !== "replay" ? (
                 <>
                   <video ref={videoRef} autoPlay playsInline muted onPlaying={(event) => {
@@ -398,8 +409,8 @@ function FloorSession({ mode }: { mode: Mode }) {
                     if (mode === "feed") advanceFeed();
                   }} onError={() => {
                     if (mode === "feed") advanceFeed(true);
-                  }} className={`${cameraState === "running" ? "block h-auto w-full" : "absolute inset-0 h-full w-full object-contain"} ${skeletonView ? "opacity-0" : ""}`} />
-                  {skeletonView && <PoseLayer video={poseVideo} active onFail={handlePoseFail} />}
+                  }} className={`${cameraState === "running" ? "block h-auto w-full" : "absolute inset-0 h-full w-full object-contain"} ${hideVideo ? "opacity-0" : ""}`} />
+                  {skeleton && <PoseLayer video={poseVideo} active onFail={handlePoseFail} />}
                   {cameraState !== "running" && (
                     <button type="button" disabled={cameraState === "starting"} onClick={() => void startCamera()} className="control control-primary relative">{mode === "feed" ? "Start feed" : "Start camera"}</button>
                   )}
