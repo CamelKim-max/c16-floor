@@ -23,6 +23,8 @@ export function normalizeSignals(x: unknown, dwellSec: number): Signals {
       ? Math.max(0, dwellSec) : 0,
     ...(item ? { item } : {}),
     ...(upsell ? { upsell } : {}),
+    ...(typeof value.x === "number" && Number.isFinite(value.x) && value.x >= 0 && value.x <= 1
+      ? { x: Math.round(value.x * 100) / 100 } : {}),
   };
 }
 
