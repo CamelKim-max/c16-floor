@@ -79,19 +79,20 @@ export function PoseLayer({ video, active }: { video: HTMLVideoElement | null; a
                 context.strokeStyle = "rgba(255, 255, 255, 0.8)";
                 context.fillStyle = "#bef264";
                 for (const pose of result.landmarks) {
+                  const visibilityNotPopulated = Math.max(0, ...pose.map((landmark) => landmark.visibility ?? 0)) === 0;
                   context.beginPath();
                   for (const { start, end } of PoseLandmarker.POSE_CONNECTIONS) {
                     // Keep the nose, but omit facial detail from both lines and dots.
                     if ((start >= 1 && start <= 10) || (end >= 1 && end <= 10)) continue;
                     const from = pose[start];
                     const to = pose[end];
-                    if (!from || !to || from.visibility < 0.5 || to.visibility < 0.5) continue;
+                    if (!from || !to || (!visibilityNotPopulated && ((from.visibility ?? 1) < 0.5 || (to.visibility ?? 1) < 0.5))) continue;
                     context.moveTo(from.x * canvas.width, from.y * canvas.height);
                     context.lineTo(to.x * canvas.width, to.y * canvas.height);
                   }
                   context.stroke();
                   pose.forEach((landmark, index) => {
-                    if ((index >= 1 && index <= 10) || landmark.visibility < 0.5) return;
+                    if ((index >= 1 && index <= 10) || (!visibilityNotPopulated && (landmark.visibility ?? 1) < 0.5)) return;
                     context.beginPath();
                     context.arc(landmark.x * canvas.width, landmark.y * canvas.height, 3, 0, Math.PI * 2);
                     context.fill();
