@@ -5,7 +5,7 @@ export const FEATURES = {
   /** /floor?mode=replay plays fixtures/replay.json client-side (demo fallback). */
   replay: true,
   /** Side: ntfy buzz to the associate's watch when a shopper turns "ready". */
-  buzz: false,
+  buzz: true,
 } satisfies Record<string, boolean>;
 
 /** Replay step interval on /floor?mode=replay. */
