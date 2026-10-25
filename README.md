@@ -6,6 +6,14 @@ Store cameras read what each shopper's body is doing and whisper one line into t
 - Track: No App — the associate never looks at a screen. The page is for judges and managers.
 - Team TidyMind. Built solo at c0mpiled-16 @ UC San Diego, 2026-10-24.
 
+## Why it matters (numbers in the demo video, with sources)
+- **−79.7%** purchases when customers learned the seller was a bot (disclosed before the call, outbound phone sales). Luo et al., Marketing Science 2019 (field experiment, 6,200+ customers). **64%** of customers would prefer companies not use AI in customer service. Gartner 2024 (5,728 customers).
+- Matching the selling tactic to the shopper's goal raised purchases. Kim & McFarland, Journal of the Academy of Marketing Science 2024. Adapting to each customer ↔ higher sales performance across 155 samples, 31,000+ salespeople. Franke & Park, Journal of Marketing Research 2006 (meta-analysis).
+- **$750K+** sold by each of about half of Neiman Marcus's commissioned associates with 1+ year tenure, in one fiscal year. Neiman Marcus Group 10-K, FY2018.
+- **1.7×**: top 10% of sellers vs the average seller, same job. Hunter, Schmidt & Judiesch, Journal of Applied Psychology 1990 (output SD = 38.5% of mean for non-insurance sales incl. department store clerks); top 10% under a normal model (calc).
+- **+4.5%** revenue when 168 stores re-set staff hours (field result, not ours). Fisher, Gallino & Netessine, M&SOM 2021.
+- **~$120K** more sales per Foot Locker store a year, **~$290M** across 2,410 stores (illustrative estimate): store sales $6.52B, Foot Locker 10-K FY2024 × 4.5%. Not a HyperSell result; a controlled store pilot measures it.
+
 ## How it works
 1. Every 4 s the page grabs a camera frame (640 px JPEG) and posts it to `POST /api/read`.
 2. A vision model (Anthropic Messages API, `claude-sonnet-5-5`) returns only observable signals per shopper: alone / with a companion / group, earbuds, phone in hand, items held, comparing two items, looking around, touching a product, the product in focus, one related product.
