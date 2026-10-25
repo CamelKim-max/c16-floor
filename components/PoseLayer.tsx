@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
 
-export function PoseLayer({ video, active, onFail }: { video: HTMLVideoElement | null; active: boolean; onFail?: () => void }) {
+export function PoseLayer({ video, active, onFail, onPoses }: { video: HTMLVideoElement | null; active: boolean; onFail?: () => void; onPoses?: (centers: number[]) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const warnedRef = useRef(false);
   const [failed, setFailed] = useState(false);
@@ -14,6 +14,7 @@ export function PoseLayer({ video, active, onFail }: { video: HTMLVideoElement |
     let loading = false;
     let frame = 0;
     let lastVideoTime = -1;
+    let lastReport = 0;
     let landmarker: PoseLandmarker | null = null;
 
     const close = () => {
@@ -45,11 +46,14 @@ export function PoseLayer({ video, active, onFail }: { video: HTMLVideoElement |
         if (cancelled) return;
         const create = (delegate: "GPU" | "CPU") => PoseLandmarker.createFromOptions(fileset, {
           baseOptions: {
-            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
             delegate,
           },
           runningMode: "VIDEO",
           numPoses: 4,
+          minPoseDetectionConfidence: 0.3,
+          minPosePresenceConfidence: 0.3,
+          minTrackingConfidence: 0.3,
         });
         let created: PoseLandmarker;
         try {
@@ -76,9 +80,13 @@ export function PoseLayer({ video, active, onFail }: { video: HTMLVideoElement |
             try {
               const result = landmarker.detectForVideo(video, performance.now());
               try {
-                context.lineWidth = 2;
-                context.strokeStyle = "rgba(255, 255, 255, 0.8)";
-                context.fillStyle = "#bef264";
+                const scale = canvas.width / 480;
+                context.lineWidth = 2.5 * scale;
+                context.lineCap = "round";
+                context.strokeStyle = "#bef264";
+                context.fillStyle = "#ffffff";
+                context.shadowColor = "rgba(0, 0, 0, 0.6)";
+                context.shadowBlur = 2 * scale;
                 for (const pose of result.landmarks) {
                   const visibilityNotPopulated = Math.max(0, ...pose.map((landmark) => landmark.visibility ?? 0)) === 0;
                   context.beginPath();
@@ -95,9 +103,15 @@ export function PoseLayer({ video, active, onFail }: { video: HTMLVideoElement |
                   pose.forEach((landmark, index) => {
                     if ((index >= 1 && index <= 10) || (!visibilityNotPopulated && (landmark.visibility ?? 1) < 0.5)) return;
                     context.beginPath();
-                    context.arc(landmark.x * canvas.width, landmark.y * canvas.height, 3, 0, Math.PI * 2);
+                    context.arc(landmark.x * canvas.width, landmark.y * canvas.height, 2.5 * scale, 0, Math.PI * 2);
                     context.fill();
                   });
+                }
+                const now = performance.now();
+                if (onPoses && now - lastReport > 500) {
+                  lastReport = now;
+                  // Hip midpoint (23/24) is the steadiest horizontal center of a body.
+                  onPoses(result.landmarks.map((pose) => ((pose[23]?.x ?? pose[0].x) + (pose[24]?.x ?? pose[0].x)) / 2));
                 }
               } finally {
                 result.close();
@@ -126,7 +140,7 @@ export function PoseLayer({ video, active, onFail }: { video: HTMLVideoElement |
       close();
       canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     };
-  }, [video, active, onFail]);
+  }, [video, active, onFail, onPoses]);
 
   if (!active || failed) return null;
   return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />;

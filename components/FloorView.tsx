@@ -19,11 +19,25 @@ const segmentStyle: Record<Segment, { label: string; marker: string }> = {
   leave: { label: "text-text-secondary", marker: "border-text-secondary" },
 };
 
-function ShopperMarkers({ shoppers }: { shoppers: ShopperRead[] }) {
+// Snap model-estimated x to the nearest detected body, each body used once.
+function snapToPoses(shoppers: ShopperRead[], poses: number[]) {
+  const free = [...poses];
+  return new Map(shoppers.map((shopper) => {
+    const x = shopper.signals.x;
+    if (x === undefined || !Number.isFinite(x) || free.length === 0) return [shopper.track, x];
+    let best = 0;
+    free.forEach((pose, index) => { if (Math.abs(pose - x) < Math.abs(free[best] - x)) best = index; });
+    if (Math.abs(free[best] - x) > 0.25) return [shopper.track, x];
+    return [shopper.track, free.splice(best, 1)[0]];
+  }));
+}
+
+function ShopperMarkers({ shoppers, poses }: { shoppers: ShopperRead[]; poses: number[] }) {
+  const snapped = snapToPoses(shoppers, poses);
   return (
     <div className="pointer-events-none absolute inset-0" aria-hidden="true">
       {shoppers.map((shopper) => {
-        const x = shopper.signals.x;
+        const x = snapped.get(shopper.track);
         if (x === undefined || !Number.isFinite(x) || x < 0 || x > 1) return null;
         const style = segmentStyle[shopper.play.segment];
         return (
@@ -70,6 +84,7 @@ function FloorSession({ mode, clip }: { mode: Mode; clip?: number }) {
   const [skeleton, setSkeleton] = useState(false);
   const [hideVideo, setHideVideo] = useState(false);
   const [poseVideo, setPoseVideo] = useState<HTMLVideoElement | null>(null);
+  const [poses, setPoses] = useState<number[]>([]);
   const [speaking, setSpeaking] = useState(false);
   const [cameraState, setCameraState] = useState<"idle" | "starting" | "running">("idle");
   const [readFailed, setReadFailed] = useState(false);
@@ -109,6 +124,7 @@ function FloorSession({ mode, clip }: { mode: Mode; clip?: number }) {
     previousShopperCount.current = 0;
     previousSegments.current.clear();
     setPoseVideo(null);
+    setPoses([]);
     setSkeleton(false);
     setHideVideo(false);
     setCameraState("idle");
@@ -120,6 +136,7 @@ function FloorSession({ mode, clip }: { mode: Mode; clip?: number }) {
   const handlePoseFail = useCallback(() => {
     setSkeleton(false);
     setHideVideo(false);
+    setPoses([]);
   }, []);
 
   useEffect(() => {
@@ -270,6 +287,7 @@ function FloorSession({ mode, clip }: { mode: Mode; clip?: number }) {
     setRead(null);
     setReadFailed(false);
     setPoseVideo(null);
+    setPoses([]);
     video.src = feedClips[index];
     video.load();
   }
@@ -379,7 +397,7 @@ function FloorSession({ mode, clip }: { mode: Mode; clip?: number }) {
             {mode !== "replay" && (
               <>
                 <button type="button" aria-pressed={skeleton} className="control" onClick={() => {
-                  if (skeleton) setHideVideo(false);
+                  if (skeleton) { setHideVideo(false); setPoses([]); }
                   setSkeleton(!skeleton);
                 }}>Skeleton</button>
                 <button type="button" aria-pressed={hideVideo} disabled={!skeleton} className="control disabled:cursor-not-allowed" onClick={() => setHideVideo((value) => !value)}>Hide video</button>
@@ -413,7 +431,7 @@ function FloorSession({ mode, clip }: { mode: Mode; clip?: number }) {
                   }} onError={() => {
                     if (mode === "feed") advanceFeed(true);
                   }} className={`${cameraState === "running" ? "block h-auto w-full" : "absolute inset-0 h-full w-full object-contain"} ${hideVideo ? "opacity-0" : ""}`} />
-                  {skeleton && <PoseLayer video={poseVideo} active onFail={handlePoseFail} />}
+                  {skeleton && <PoseLayer video={poseVideo} active onFail={handlePoseFail} onPoses={setPoses} />}
                   {cameraState !== "running" && (
                     <button type="button" disabled={cameraState === "starting"} onClick={() => void startCamera()} className="control control-primary relative">{mode === "feed" ? "Start feed" : "Start camera"}</button>
                   )}
@@ -425,8 +443,8 @@ function FloorSession({ mode, clip }: { mode: Mode; clip?: number }) {
                   ))}
                 </div>
               )}
-              <ShopperMarkers shoppers={read?.shoppers ?? []} />
-              {mode === "feed" && <span className="pointer-events-none absolute top-2 left-2 z-10 rounded-[6px] bg-[rgba(20,20,20,0.7)] px-2 py-1 text-xs font-medium text-white">{COPY.feedLabel}</span>}
+              <ShopperMarkers shoppers={read?.shoppers ?? []} poses={skeleton ? poses : []} />
+              {mode === "feed" && <span className="pointer-events-none absolute bottom-2 left-2 z-10 rounded-[6px] bg-[rgba(20,20,20,0.7)] px-2 py-1 text-xs font-medium text-white">{COPY.feedLabel}</span>}
             </div>
             <canvas ref={canvasRef} hidden />
             <div className="mt-3 flex min-h-5 flex-wrap items-center justify-between gap-2 text-xs text-text-muted">
